@@ -1,0 +1,42 @@
+import argparse
+import numpy as np
+
+parser = argparse.ArgumentParser(description='Evaluate PSM score from PeptideShaker reports.')
+parser.add_argument('file_paths', metavar='file_paths', type=argparse.FileType('r'), nargs='+',
+                    help='space separated list of absolute filepaths to the PeptideShaker reports.')
+args = parser.parse_args()
+
+
+class Spectrum:
+    '''
+    Class to parse psm annotated spectra files from PeptideShaker
+    '''
+    def __init__(self, file_path):
+        self.file_path = file_path
+
+    def parse_report(self):
+        annotated_spectrum = []
+        with open(self.file_path, 'r') as f:
+            for n,l in enumerate(f):
+                ls = l.strip().split('\t')
+                if n==0:
+                    self.pep_seq = ls[1]
+                    continue
+                if n==1:
+                    keys = ls
+                    continue
+                line = dict(zip(keys, ls))
+                annotated_spectrum.append((line[x] for x in ['Type', 'Intensity']))
+        return annotated_spectrum
+
+class Score:
+    '''
+    Class to provide score calculators for parsed spectra
+    '''
+    pass
+
+
+if __name__ == "__main__":
+    for fpath in list(args.file_paths):
+        spectrum = Spectrum(fpath)
+        print(spectrum.parse_report())
