@@ -37,14 +37,20 @@ class Score:
     '''
 
     def hyperscore(self, peptide, spectrum):
-        Ny  = sum([1 for peak in spectrum if 'y' in peak['Type']])
-        Nb  = sum([1 for peak in spectrum if 'b' in peak['Type']])
-        Iy  = sum([peak['Intensity'] for peak in spectrum if 'y' in peak['Type']])
-        Ib  = sum([peak['Intensity'] for peak in spectrum if 'b' in peak['Type']])
-        hscore = np.log(np.math.factorial(Nb)*np.math.factorial(Ny)*Iy*Ib)
+        hyp = dict()
+        hyp['Ny'] = sum([1 for peak in spectrum if 'y' in peak['Type']])
+        hyp['Nb'] = sum([1 for peak in spectrum if 'b' in peak['Type']])
+        hyp['Iy'] = sum([peak['Intensity'] for peak in spectrum if 'y' in peak['Type']])
+        hyp['Ib'] = sum([peak['Intensity'] for peak in spectrum if 'b' in peak['Type']])
+        for k in hyp.keys():
+            if hyp[k]==0:
+                hyp[k]=1
+        hscore = np.log(np.math.factorial(hyp['Nb'])*np.math.factorial(hyp['Ny'])*hyp['Iy']*hyp['Ib'])
+
         return hscore
 
     def mvhscore(self, peptide, spectrum):
+
         pass
 
 
