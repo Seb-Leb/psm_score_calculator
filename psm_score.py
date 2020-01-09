@@ -31,6 +31,7 @@ class Spectrum:
                     continue
                 line = dict(zip(keys, ls))
                 line['Intensity'] = float(line['Intensity'])
+                line['m/z']       = float(line['m/z'])
                 annotated_spectrum.append(line)
         return annotated_spectrum
 
