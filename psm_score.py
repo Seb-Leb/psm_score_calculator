@@ -4,10 +4,10 @@ import random
 import itertools as itt
 import numpy as np
 
-#parser = argparse.ArgumentParser(description='Evaluate PSM score from PeptideShaker reports.')
-#parser.add_argument('file_paths', metavar='file_paths', type=str, nargs='+',
-                    #help='space separated list of absolute filepaths to the PeptideShaker reports.')
-#args = parser.parse_args()
+parser = argparse.ArgumentParser(description='Evaluate PSM score from PeptideShaker reports.')
+parser.add_argument('file_paths', metavar='file_paths', type=str, nargs='+',
+                    help='space separated list of absolute filepaths to the PeptideShaker reports.')
+args = parser.parse_args()
 
 
 class Spectrum:
@@ -26,7 +26,8 @@ class Spectrum:
                     self.pep_seq = ls[1]
                     continue
                 if n==1:
-                    keys = ls
+                    keys = ['peak_n',]+ls
+                    print(keys)
                     continue
                 line = dict(zip(keys, ls))
                 line['Intensity'] = float(line['Intensity'])
@@ -82,10 +83,10 @@ class TheoreticalSpectrum:
         self.b_ions = b_ions
         self.y_ions = y_ions
 
-#if __name__ == "__main__":
-    #for fpath in list(args.file_paths):
-        #spectrum = Spectrum(fpath)
-        #score = Score()
-        #annotated_spec = spectrum.parse_report()
-        #hscore = score.hyperscore(spectrum.pep_seq, annotated_spec)
-        #print('peptide: {}  hyperscore: {}'.format(spectrum.pep_seq, hscore))
+if __name__ == "__main__":
+    for fpath in list(args.file_paths):
+        spectrum = Spectrum(fpath)
+        score = Score()
+        annotated_spec = spectrum.parse_report()
+        hscore = score.hyperscore(spectrum.pep_seq, annotated_spec)
+        print('peptide: {}  hyperscore: {}'.format(spectrum.pep_seq, hscore))
