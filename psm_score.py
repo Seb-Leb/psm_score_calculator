@@ -1,93 +1,60 @@
+import os
+import sys
 import argparse
-import yaml
-import random
-import itertools as itt
-import numpy as np
+from score_module import PSMReport, Score, ScoreReport, TheoreticalSpectrum
 
 parser = argparse.ArgumentParser(description='Evaluate PSM score from PeptideShaker reports.')
-parser.add_argument('file_paths', metavar='file_paths', type=str, nargs='+',
-                    help='space separated list of absolute filepaths to the PeptideShaker reports.')
+parser.add_argument('pepshaker_report_path', metavar='pepshaker_report_path', type=str,
+        help='absolute filepath to the PeptideShaker report containing all spectra with annoations.')
+parser.add_argument('output_path', metavar='output_path', type=str,
+        help='Output path to the psm score report.')
+parser.add_argument('--n_cpu', metavar='n_cpu', type=int, default=1,
+        help='Number of cpus available for parallel processing of P-values.')
+parser.add_argument('--n_random', metavar='n_random', type=int, default=10000,
+        help='Number of random peptide to generate for P-value calculation.')
+parser.add_argument('--tol', metavar='tol', type=float, default=0.02,
+        help='Tolerence for MS-2 peak assignment in DA.')
+parser.add_argument('--compute_pval', metavar='compute_pval', type=int, default=1,
+        help='Tolerence for MS-2 peak assignment in DA.')
+
 args = parser.parse_args()
 
 
-class Spectrum:
-    '''
-    Class to parse psm annotated spectra files from PeptideShaker
-    '''
-    def __init__(self, file_path):
-        self.file_path = file_path
-
-    def parse_report(self):
-        annotated_spectrum = []
-        with open(self.file_path, 'r') as f:
-            for n,l in enumerate(f):
-                ls = l.strip().split('\t')
-                if n==0:
-                    self.pep_seq = ls[1]
-                    continue
-                if n==1:
-                    keys = ['peak_n',]+ls
-                    print(keys)
-                    continue
-                line = dict(zip(keys, ls))
-                line['Intensity'] = float(line['Intensity'])
-                line['m/z']       = float(line['m/z'])
-                annotated_spectrum.append(line)
-        return annotated_spectrum
-
-
-class Score:
-    '''
-    Class to provide score calculators for parsed spectra
-    '''
-
-    def hyperscore(self, peptide, spectrum):
-        hyp = dict()
-        hyp['Ny'] = sum([1 for peak in spectrum if 'y' in peak['Type']])
-        hyp['Nb'] = sum([1 for peak in spectrum if 'b' in peak['Type']])
-        hyp['Iy'] = sum([peak['Intensity'] for peak in spectrum if 'y' in peak['Type']])
-        hyp['Ib'] = sum([peak['Intensity'] for peak in spectrum if 'b' in peak['Type']])
-        for k in hyp.keys():
-            if hyp[k]==0:
-                hyp[k]=1
-        hscore = np.log(np.math.factorial(hyp['Nb'])*np.math.factorial(hyp['Ny'])*hyp['Iy']*hyp['Ib'])
-
-        return hscore
-
-    def mvhscore(self, peptide, spectrum):
-
-        pass
-
-    def get_random_peptides(self, pep_seq, n_random=10000):
-        pep_aas = list(pep_seq)
-        rand_pep_seqs = set()
-        if len(pep_seq) < 8 or len(set(pep_seq)) < 7:
-            return list(set([''.join(x) for x in itt.permutations(pep_seq)]))
-        while len(rand_pep_seqs)<n_random:
-            random.shuffle(pep_aas)
-            rand_pep = ''.join(pep_aas)
-            if rand_pep != pep_seq:
-                rand_pep_seqs.add(rand_pep)
-        return rand_pep_seqs
-
-class TheoreticalSpectrum:
-    def __init__(self, pep_seq):
-        pep_len = len(pep_seq)
-        with open('psm_score_calculator/aa_weight.yml', 'r') as f:
-            self.aa_weights = yaml.load(f)
-
-        b_ions, y_ions = np.zeros(pep_len), np.zeros(pep_len)
-        for i in range(pep_len):
-            b_ions[i]           = sum(self.aa_weights[aa] for aa in pep_seq[:i+1])
-            y_ions[pep_len-1-i] = sum(self.aa_weights[aa] for aa in pep_seq[i:])
-
-        self.b_ions = b_ions
-        self.y_ions = y_ions
-
 if __name__ == "__main__":
-    for fpath in list(args.file_paths):
-        spectrum = Spectrum(fpath)
-        score = Score()
-        annotated_spec = spectrum.parse_report()
-        hscore = score.hyperscore(spectrum.pep_seq, annotated_spec)
-        print('peptide: {}  hyperscore: {}'.format(spectrum.pep_seq, hscore))
+    args = vars(args)
+    compute_pval      = args['compute_pval']
+    score_report_path = os.path.abspath(args['output_path'])
+    if os.path.isfile(score_report_path):
+        print('The psm scores report file {} already exists.\n'.format(score_report_path))
+        while True:
+            resp = input('Overwrite? (y/n) : ')
+            if resp == 'n':
+                sys.exit()
+            if resp == 'y':
+                os.remove(score_report_path)
+                break
+    out_report   = ScoreReport(score_report_path)
+    ps_report    = os.path.abspath(args['pepshaker_report_path'])
+    if not os.path.exists(ps_report) or not os.path.isfile(ps_report):
+        print('Provide full path to the peptide shaker report to be scored.')
+
+    psm_rep = PSMReport(ps_report)
+    S = Score(
+            n_cpu=args['n_cpu'],
+            tol=args['tol'],
+            n_random=args['n_random']
+            )
+    print('Scoring {} psms.')
+    for psm_n in psm_rep.psms:
+        pep_seq     = psm_rep.psms[psm_n]['Sequence']
+        spectrum    = psm_rep.psms[psm_n]['Spectrum']
+        scan_number = psm_rep.psms[psm_n]['Spectrum Scan Number']
+        T = TheoreticalSpectrum(pep_seq)
+        spec_ann = S.get_peaks(T.ions, spectrum)
+        hscore = S.hyperscore(spec_ann, pep_seq, spectrum, compute_pval=compute_pval)
+        if compute_pval:
+            hscore, pval = hscore
+            out_report.write([scan_number, pep_seq, hscore, pval])
+        else:
+            out_report.write([scan_number, pep_seq, hscore])
+    print('Done.')
