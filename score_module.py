@@ -2,6 +2,7 @@ import os
 import argparse
 import yaml
 import random
+from collections import Counter
 import itertools as itt
 import multiprocessing as mp
 import numpy as np
@@ -76,10 +77,11 @@ class Score:
 
     def hyperscore_pval(self, pep_seq, spectrum, hscore):
         rand_peps = self.get_random_peptides(pep_seq)
+        T = TheoreticalSpectrum()
 
         if self.n_cpu > 1:
             pool = mp.Pool(self.n_cpu)
-            args = list(zip(rand_peps, [spectrum,]*len(rand_peps)))
+            args = list(zip(rand_peps, [spectrum,]*len(rand_peps), [T,]*len(rand_peps)))
             result = pool.map_async(self.align_and_score, args)
             hscores = result.get()
             pool.close()
@@ -88,17 +90,17 @@ class Score:
         else:
             hscores = []
             for pep in rand_peps:
-                theo_spec = TheoreticalSpectrum(pep)
-                spec_ann  = self.get_peaks(theo_spec.ions, spectrum)
+                T.compute_spectrum(pep)
+                spec_ann  = self.get_peaks(T.ions, spectrum)
                 hscores.append(self.hyperscore(spec_ann))
         hscores = np.array(hscores)
         pval = (1+sum(hscores > hscore))/len(hscores)
         return pval
 
     def align_and_score(self, pep_spec):
-        pep, spec = pep_spec
-        theo_spec = TheoreticalSpectrum(pep)
-        spec_ann  = self.get_peaks(theo_spec.ions, spec)
+        pep, spec, T = pep_spec
+        T.compute_spectrum(pep)
+        spec_ann  = self.get_peaks(T.ions, spec)
         return self.hyperscore(spec_ann)
 
     def get_peaks(self, ions, spectrum):
@@ -113,7 +115,8 @@ class Score:
     def get_random_peptides(self, pep_seq):
         pep_aas = list(pep_seq)
         rand_pep_seqs = set()
-        if len(pep_seq) < 8 or len(set(pep_seq)) < 7:
+        n_permute = np.math.factorial(len(pep_seq)) / np.prod([np.math.factorial(n) for n in Counter(pep_seq).values()])
+        if n_permute <= self.n_random:
             return list(set([''.join(x) for x in itt.permutations(pep_seq)]))
         while len(rand_pep_seqs)<self.n_random:
             random.shuffle(pep_aas)
@@ -124,19 +127,19 @@ class Score:
 
 
 class TheoreticalSpectrum:
-    def __init__(self, pep_seq, charges=[2,3,4]):
-        ion_types  = ['y', 'b']
-        frag_shift = {'y':19., 'b':1.}
-        pep_len = len(pep_seq)
-
-        with open('./aa_weight.yml', 'r') as f:
+    def __init__(self, aa_weights='/nfs3_ib/ip32-ib/home/sleblanc/psm_score_calculator/aa_weight.yml', charges=[2,3,4]):
+        self.ion_types  = ['y', 'b']
+        self.frag_shift = {'y':19., 'b':1.}
+        self.charges = charges
+        with open(aa_weights, 'r') as f:
             self.aa_weights = yaml.full_load(f)
 
-
+    def compute_spectrum(self, pep_seq):
+        pep_len = len(pep_seq)
         frag_ions = []
         for i in range(pep_len):
             frags      = {'y':pep_seq[i:] ,'b':pep_seq[:i+1]}
-            for ion_type in ion_types:
+            for ion_type in self.ion_types:
                 frag = frags[ion_type]
 
                 n_NH3 = sum(frag.count(x) for x in 'RKNQ')
@@ -167,20 +170,22 @@ class TheoreticalSpectrum:
             ion_order = len(frag_ion['frag'])
             shift     = frag_ion['shift']
             mz        = sum(self.aa_weights[aa] for aa in frag_ion['frag']) \
-                    + frag_shift[subtype] \
+                    + self.frag_shift[subtype] \
                     - (shift.count('NH3')*17.) \
                     - (shift.count('H2O')*18.)
             mono_ions[n] = (subtype, ion_order, shift, mz, 1)
 
         ions = mono_ions.copy()
-        for c in charges:
+        for c in self.charges:
             multi = mono_ions.copy()
             multi['z'] = c
             multi['m/z'] = (multi['m/z']+c-1)/c
             ions = np.concatenate((ions, multi))
 
-        self.ions = np.sort(ions, order=['m/z'])
-        self.mono_ions = mono_ions
+        ions = np.sort(ions, order=['m/z'])
+        self.ions = ions
+        return ions
+
 
 class ScoreReport:
     def __init__(self, out_report_path):

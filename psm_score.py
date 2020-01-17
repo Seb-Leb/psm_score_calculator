@@ -44,12 +44,13 @@ if __name__ == "__main__":
             tol=args['tol'],
             n_random=args['n_random']
             )
-    print('Scoring {} psms.')
+    print('Scoring {} psms.'.format(len(psm_rep.psms)))
+    T = TheoreticalSpectrum()
     for psm_n in psm_rep.psms:
         pep_seq     = psm_rep.psms[psm_n]['Sequence']
         spectrum    = psm_rep.psms[psm_n]['Spectrum']
         scan_number = psm_rep.psms[psm_n]['Spectrum Scan Number']
-        T = TheoreticalSpectrum(pep_seq)
+        T.compute_spectrum(pep_seq)
         spec_ann = S.get_peaks(T.ions, spectrum)
         hscore = S.hyperscore(spec_ann, pep_seq, spectrum, compute_pval=compute_pval)
         if compute_pval:
