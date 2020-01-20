@@ -65,7 +65,10 @@ class Score:
         I_y  = max(1, sum(spec_ann[y,-1]))
         I_b  = max(1, sum(spec_ann[b,-1]))
 
-        hscore = np.log(np.math.factorial(n_b)*np.math.factorial(n_y)*I_y*I_b)
+        try:
+            hscore = np.log(np.math.factorial(n_b)*np.math.factorial(n_y)*I_y*I_b)
+        except:
+            hscore = 1e8
 
         if compute_pval:
             if spectrum is None or pep_seq is None:
@@ -127,7 +130,9 @@ class Score:
 
 
 class TheoreticalSpectrum:
-    def __init__(self, aa_weights='/nfs3_ib/ip32-ib/home/sleblanc/psm_score_calculator/aa_weight.yml', charges=[2,3,4]):
+    def __init__(self, charges=[2,3,4]):
+        dirname = os.path.dirname(__file__)
+        aa_weights = os.path.join(dirname,'aa_weight.yml')
         self.ion_types  = ['y', 'b']
         self.frag_shift = {'y':19., 'b':1.}
         self.charges = charges
