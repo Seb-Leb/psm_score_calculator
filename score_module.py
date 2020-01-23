@@ -120,7 +120,7 @@ class Score:
         rand_pep_seqs = set()
         n_permute = np.math.factorial(len(pep_seq)) / np.prod([np.math.factorial(n) for n in Counter(pep_seq).values()])
         if n_permute <= self.n_random:
-            return list(set([''.join(x) for x in itt.permutations(pep_seq)]))
+            return list(permutations(pep_seq))
         while len(rand_pep_seqs)<self.n_random:
             random.shuffle(pep_aas)
             rand_pep = ''.join(pep_aas)
@@ -200,4 +200,12 @@ class ScoreReport:
         with open(self.out_report_path, 'a') as f:
             f.write('\t'.join([str(x) for x in data])+'\n')
 
+def perm(unplaced, prefix):
+    if unplaced:
+        for element in unplaced:
+            yield from perm(unplaced - Counter(element), prefix + element)
+    else:
+        yield prefix
 
+def permutations(iterable):
+    yield from perm(Counter(iterable), '')
