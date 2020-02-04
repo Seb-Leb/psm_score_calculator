@@ -2,6 +2,7 @@ import os
 import argparse
 import yaml
 import random
+import pickle
 from collections import Counter
 import itertools as itt
 import multiprocessing as mp
@@ -116,17 +117,20 @@ class Score:
         return np.concatenate((peaks, spec_int), axis=1)
 
     def get_random_peptides(self, pep_seq):
-        pep_aas = list(pep_seq)
-        rand_pep_seqs = set()
-        n_permute = np.math.factorial(len(pep_seq)) / np.prod([np.math.factorial(n) for n in Counter(pep_seq).values()])
-        if n_permute <= self.n_random:
-            return list(permutations(pep_seq))
-        while len(rand_pep_seqs)<self.n_random:
-            random.shuffle(pep_aas)
-            rand_pep = ''.join(pep_aas)
-            if rand_pep != pep_seq:
-                rand_pep_seqs.add(rand_pep)
-        return list(rand_pep_seqs)
+        pep_len = len(pep_seq)
+        rand_peps = pickle.load(open('/home/sleblanc/rand_peps.pkl', 'rb'))
+        rand_peps = [x[:pep_len] for x in rand_peps]
+        #pep_aas = list(pep_seq)
+        #rand_pep_seqs = set()
+        #n_permute = np.math.factorial(len(pep_seq)) / np.prod([np.math.factorial(n) for n in Counter(pep_seq).values()])
+        #if n_permute <= self.n_random:
+            #return list(permutations(pep_seq))
+        #while len(rand_pep_seqs)<self.n_random:
+            #random.shuffle(pep_aas)
+            #rand_pep = ''.join(pep_aas)
+            #if rand_pep != pep_seq:
+                #rand_pep_seqs.add(rand_pep)
+        return rand_peps
 
 
 class TheoreticalSpectrum:
