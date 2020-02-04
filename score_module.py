@@ -56,7 +56,7 @@ class Score:
         self.tol      = tol
         self.n_cpu    = n_cpu
 
-    def hyperscore(self, spec_ann, pep_seq=None, spectrum=None, compute_pval=False):
+    def hyperscore(self, spec_ann, pep_seq=None, spectrum=None, compute_pval=False, rand_peps=None):
         if not spec_ann.any():
             return 0
         y    = spec_ann[:,0] == b'y'
@@ -74,13 +74,13 @@ class Score:
         if compute_pval:
             if spectrum is None or pep_seq is None:
                 return 'Spectrum and peptide sequence must be provided for P-value calulation.'
-            pval = self.hyperscore_pval(pep_seq, spectrum, hscore)
+            pval = self.hyperscore_pval(pep_seq, spectrum, hscore, rand_peps)
             hscore = (hscore, pval)
 
         return hscore
 
-    def hyperscore_pval(self, pep_seq, spectrum, hscore):
-        rand_peps = self.get_random_peptides(pep_seq)
+    def hyperscore_pval(self, pep_seq, spectrum, hscore, rand_peps=None):
+        rand_peps = self.get_random_peptides(pep_seq, rand_peps)
         T = TheoreticalSpectrum()
 
         if self.n_cpu > 1:
@@ -116,9 +116,10 @@ class Score:
         spec_int = spectrum['Intensity'][in_tol][:, np.newaxis]
         return np.concatenate((peaks, spec_int), axis=1)
 
-    def get_random_peptides(self, pep_seq):
+    def get_random_peptides(self, pep_seq, rand_peps):
         pep_len = len(pep_seq)
-        rand_peps = pickle.load(open('/home/sleblanc/rand_peps.pkl', 'rb'))
+        if rand_peps is None:
+            rand_peps = pickle.load(open('/home/sleblanc/rand_peps.pkl', 'rb'))
         rand_peps = [x[:pep_len] for x in rand_peps]
         #pep_aas = list(pep_seq)
         #rand_pep_seqs = set()

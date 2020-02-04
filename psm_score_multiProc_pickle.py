@@ -24,13 +24,14 @@ parser.add_argument('--compute_pval', metavar='compute_pval', type=int, default=
 args = parser.parse_args()
 
 def psm_score_worker(psm, q):
+    rand_peps = pickle.load(open('/home/sleblanc/rand_peps.pkl', 'rb'))
     pep_seq, spectrum, scan_number, db, exp  = psm
     print('Scoring {} with spectrum {}.'.format(pep_seq, scan_number), flush=True)
     S = Score(tol=0.02, n_random=10000)
     T = TheoreticalSpectrum()
     T.compute_spectrum(pep_seq)
     spec_ann = S.get_peaks(T.ions, spectrum)
-    hscore = S.hyperscore(spec_ann, pep_seq, spectrum, compute_pval=compute_pval)
+    hscore = S.hyperscore(spec_ann, pep_seq, spectrum, compute_pval=compute_pval, rand_peps=rand_peps)
     if hscore:
         hscore, pval = hscore
     else:
