@@ -26,7 +26,7 @@ args = parser.parse_args()
 def psm_score_worker(psm, q):
     rand_peps = pickle.load(open('/home/sleblanc/rand_peps.pkl', 'rb'))
     pep_seq, spectrum, scan_number, db, exp  = psm
-    print('Scoring {} with spectrum {}.'.format(pep_seq, scan_number), flush=True)
+    #print('Scoring {} with spectrum {}.'.format(pep_seq, scan_number), flush=True)
     S = Score(tol=0.02, n_random=10000)
     T = TheoreticalSpectrum()
     T.compute_spectrum(pep_seq)
@@ -51,14 +51,14 @@ def psm_report_writer(fname, mode, q):
             f.write('\t'.join([str(x) for x in m])+'\n')
             f.flush()
 
-def filter_out_previous(fpath, psms):
+def filter_out_previous(fpath, psms, db_name, exp):
     scan_nums = set()
     with open(fpath, 'r') as f:
         for n,l in enumerate(f):
-            scan_number, pep_seq, hscore, pval = l.strip().split('\t')
-            scan_nums.add(scan_number)
+            db_name, exp, scan_number, pep_seq, hscore, pval = l.strip().split('\t')
+            scan_nums.add('|'.join([db_name, exp, scan_number]))
     print('Continuing after {} spectra scored.'.format(len(scan_nums)), flush=True)
-    psms = [x for x in psms if x['Spectrum Scan Number'] not in scan_nums]
+    psms = [x for x in psms if '|'.join([db_name, exp, x['Spectrum Scan Number']]) not in scan_nums]
     return psms
 
 if __name__ == "__main__":
@@ -80,12 +80,7 @@ if __name__ == "__main__":
         score_report_path = os.path.abspath('./{}.psm_score_report.tsv'.format(ps_report.split('/')[-1]))
     print('Writing to file: {}\n'.format(score_report_path), flush=True)
 
-    psm_rep = pickle.load(open(args['pickle_path'], 'wr'))
-    psms = [v for k,v in psm_rep.psms.items()]
-
-    if mode == 'a':
-        psms = filter_out_previous(score_report_path, psms)
-    print('Scoring {} psms.'.format(len(psms)), flush=True)
+    psm_rep = pickle.load(open(args['pickle_path'], 'rb'))
 
     manager = mp.Manager()
     q = manager.Queue()
@@ -97,6 +92,9 @@ if __name__ == "__main__":
     for db_name in db_names:
         for exp in exps:
             psms = psm_rep[db_name][exp]
+            print('{} | {} | Scoring {} psms.'.format(db_name, exp, len(psms)), flush=True)
+            if mode == 'a':
+                psms = filter_out_previous(score_report_path, psms, db_name, exp)
             for psm in psms:
                 pep_seq     = psm['Sequence']
                 spectrum    = psm['Spectrum']
