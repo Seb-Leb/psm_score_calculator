@@ -22,6 +22,8 @@ parser.add_argument('--compute_pval', metavar='compute_pval', type=int, default=
         help='Tolerence for MS-2 peak assignment in DA.')
 parser.add_argument('--replicate', metavar='replicate', type=str,
         help='replicate identificartion i.e. "exp1".')
+parser.add_argument('--db', metavar='db', type=str, default='all',
+        help='replicate identificartion i.e. "exp1".')
 
 args = parser.parse_args()
 
@@ -72,6 +74,8 @@ if __name__ == "__main__":
 	'OP1pep':'OpenProt 1 peptide',
 	'OPall':'OpenProt All'
     }
+    if args['db'] != 'all':
+        db_names = {args['db']:db_names[args['db']]}
     mode = 'w'
     if args['partial_report']:
         score_report_path = os.path.abspath(args['partial_report'])
