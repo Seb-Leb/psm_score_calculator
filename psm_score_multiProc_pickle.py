@@ -20,6 +20,8 @@ parser.add_argument('--tol', metavar='tol', type=float, default=0.02,
         help='Tolerence for MS-2 peak assignment in DA.')
 parser.add_argument('--compute_pval', metavar='compute_pval', type=int, default=1,
         help='Tolerence for MS-2 peak assignment in DA.')
+parser.add_argument('--replicate', metavar='replicate', type=str,
+        help='replicate identificartion i.e. "exp1".')
 
 args = parser.parse_args()
 

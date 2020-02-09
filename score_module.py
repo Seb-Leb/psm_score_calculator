@@ -56,13 +56,13 @@ class Score:
         self.tol      = tol
         self.n_cpu    = n_cpu
 
-    def hyperscore(self, spec_ann, pep_seq=None, spectrum=None, compute_pval=False, rand_peps=None):
+    def hyperscore(self, spec_ann, pep_seq=None, spectrum=None, compute_pval=False, rand_peps=None, relative_ints=False):
         if not spec_ann.any():
             return 0
         y    = spec_ann[:,0] == b'y'
         b    = spec_ann[:,0] == b'b'
-        n_y  = max(1, sum(y))
-        n_b  = max(1, sum(b))
+        n_y  = max(1, np.unique(spec_ann[y, 1]).shape[0])
+        n_b  = max(1, np.unique(spec_ann[b, 1]).shape[0])
         I_y  = max(1, sum(spec_ann[y,-1]))
         I_b  = max(1, sum(spec_ann[b,-1]))
 
