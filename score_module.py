@@ -7,6 +7,7 @@ from collections import Counter
 import itertools as itt
 import multiprocessing as mp
 import numpy as np
+from scipy.special import comb
 
 
 class PSMReport:
@@ -56,6 +57,70 @@ class Score:
         self.tol      = tol
         self.n_cpu    = n_cpu
 
+    def mvhscore(self, spec_ann, spectrum, pep_seq=None, compute_pval=False, rand_peps=None, TIC_fraction=0.95):
+        T = spectrum.shape[0]
+        M = spec_ann.shape[0]
+        D = np.log(comb(T, M))
+        TIC = spectrum['Intensity'].sum()
+        sorted_ints = np.sort(spectrum['Intensity'])[::-1]
+        int_cumsum_frac = np.cumsum(sorted_ints)/TIC
+        k = sum(int_cumsum_frac<TIC_fraction)
+        n = int(k/7) # 3 classes
+        classified_peaks = {
+                'A':{
+                    'count': len(sorted_ints[:n]),
+                    'max': max(sorted_ints[:n]),
+                    'min': min(sorted_ints[:n])
+                    },
+                'B':{
+                    'count': len(sorted_ints[n:n+(2*n)]),
+                    'max': max(sorted_ints[n:n+(2*n)]),
+                    'min': min(sorted_ints[n:n+(2*n)])
+                    },
+                'C':{
+                    'count': len(sorted_ints[n+(2*n):n+(2*n)+(4*n)]),
+                    'max': max(sorted_ints[n+(2*n):n+(2*n)+(4*n)]),
+                    'min': min(sorted_ints[n+(2*n):n+(2*n)+(4*n)])
+                    }
+                }
+        N = 0
+        for c in classified_peaks:
+            n_peaks = sum((spec_ann[:, -1] <= classified_peaks[c]['max']) & (spec_ann[:, -1] >= classified_peaks[c]['min']))
+            N += np.log(comb(classified_peaks[c]['count'], n_peaks))
+
+        mvhscore = -(N-D)
+
+        if compute_pval:
+            pval = self.mvhscore_pval(spectrum, pep_seq, mvhscore)
+            return mvhscore, pval
+
+        return mvhscore
+
+    def mvhscore_pval(self, spectrum, pep_seq, mvhscore, rand_peps=None):
+        rand_peps = self.get_random_peptides(pep_seq, rand_peps)
+        T = TheoreticalSpectrum()
+        if self.n_cpu > 1:
+            pool = mp.Pool(self.n_cpu)
+            n_rand = len(rand_peps)
+            args = list(zip(rand_peps, [spectrum,]*n_rand, [T,]*n_rand, ['mvhscore',]*n_rand))
+            result = pool.map_async(self.align_and_score, args)
+            mvhscores = result.get()
+            pool.close()
+            pool.terminate()
+            pool.join()
+        else:
+            mvhscores = []
+            for pep in rand_peps:
+                T.compute_spectrum(pep)
+                spec_ann = self.get_peaks(T.ions, spectrum)
+                if spec_ann.shape[0]>1:
+                    mvhscores.append(self.mvhscore(spec_ann, spectrum, pep))
+                else:
+                    mvhscores.append(0)
+        mvhscores = np.array(mvhscores)
+        pval = (1+sum(mvhscores > mvhscores))/len(mvhscores)
+        return pval
+
     def hyperscore(self, spec_ann, pep_seq=None, spectrum=None, compute_pval=False, rand_peps=None, relative_ints=False):
         if not spec_ann.any():
             return 0
@@ -82,10 +147,10 @@ class Score:
     def hyperscore_pval(self, pep_seq, spectrum, hscore, rand_peps=None):
         rand_peps = self.get_random_peptides(pep_seq, rand_peps)
         T = TheoreticalSpectrum()
-
         if self.n_cpu > 1:
             pool = mp.Pool(self.n_cpu)
-            args = list(zip(rand_peps, [spectrum,]*len(rand_peps), [T,]*len(rand_peps)))
+            n_rand = len(rand_peps)
+            args = list(zip(rand_peps, [spectrum,]*n_rand, [T,]*n_rand, ['hscore',]*n_rand))
             result = pool.map_async(self.align_and_score, args)
             hscores = result.get()
             pool.close()
@@ -102,10 +167,15 @@ class Score:
         return pval
 
     def align_and_score(self, pep_spec):
-        pep, spec, T = pep_spec
+        pep, spec, T, method = pep_spec
         T.compute_spectrum(pep)
         spec_ann  = self.get_peaks(T.ions, spec)
-        return self.hyperscore(spec_ann)
+        if not spec_ann.shape[0]>1:
+            return 0
+        if method == 'hscore':
+            return self.hyperscore(spec_ann)
+        elif method == 'mvhscore':
+            return self.mvhscore(spec_ann, spec , pep)
 
     def get_peaks(self, ions, spectrum):
         aligned_peaks = np.searchsorted(ions['m/z'], spectrum['m/z'])

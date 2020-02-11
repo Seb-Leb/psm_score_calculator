@@ -24,10 +24,12 @@ parser.add_argument('--replicate', metavar='replicate', type=str,
         help='replicate identificartion i.e. "exp1".')
 parser.add_argument('--db', metavar='db', type=str, default='all',
         help='replicate identificartion i.e. "exp1".')
+parser.add_argument('--method', metavar='method', type=str, default='hyperscore',
+        help='Method for scoreing PSMs.')
 
 args = parser.parse_args()
 
-def psm_score_worker(psm, q):
+def psm_score_worker(psm, q, method):
     rand_peps = pickle.load(open('/home/sleblanc/rand_peps.pkl', 'rb'))
     pep_seq, spectrum, scan_number, db, exp  = psm
     #print('Scoring {} with spectrum {}.'.format(pep_seq, scan_number), flush=True)
@@ -35,18 +37,24 @@ def psm_score_worker(psm, q):
     T = TheoreticalSpectrum()
     T.compute_spectrum(pep_seq)
     spec_ann = S.get_peaks(T.ions, spectrum)
-    hscore = S.hyperscore(spec_ann, pep_seq, spectrum, compute_pval=compute_pval, rand_peps=rand_peps)
-    if hscore:
-        hscore, pval = hscore
-    else:
-        hscore, pval = 'null', 'null'
-    q.put([db, exp, scan_number, pep_seq, hscore, pval])
-    return [db, exp, scan_number, pep_seq, hscore, pval]
+    if method == 'hyperscore:'
+        hscore = S.hyperscore(spec_ann, pep_seq, spectrum, compute_pval=compute_pval, rand_peps=rand_peps)
+        if hscore:
+            score, pval = hscore
+        else:
+            score, pval = 'null', 'null'
+
+    elif method == 'mvhscore':
+        mvhscore = S.mvhscore(spec_ann, spectrum, pep_seq, compute_pval=compute_pval)
+        score, pval = mvhscore
+
+    q.put([db, exp, scan_number, pep_seq, score, pval])
+    return [db, exp, scan_number, pep_seq, score, pval]
 
 def psm_report_writer(fname, mode, q):
     with open(fname, mode) as f:
         if mode == 'w':
-            f.write('\t'.join(['db', 'exp', 'scan_number', 'pep_seq', 'hscore', 'pval'])+'\n')
+            f.write('\t'.join(['db', 'exp', 'scan_number', 'pep_seq', 'score', 'pval'])+'\n')
             f.flush()
         while 1:
             m = q.get()
@@ -71,8 +79,8 @@ if __name__ == "__main__":
     exps = ['exp%i'%x for x in range(1,4)]
     db_names = {
 	'Ref':'OpenProt Reference',
-	'OP1pep':'OpenProt 1 peptide',
-	'OPall':'OpenProt All'
+	#'OP1pep':'OpenProt 1 peptide',
+	#'OPall':'OpenProt All'
     }
     if args['db'] != 'all':
         db_names = {args['db']:db_names[args['db']]}
@@ -87,6 +95,7 @@ if __name__ == "__main__":
     print('Writing to file: {}\n'.format(score_report_path), flush=True)
 
     psm_rep = pickle.load(open(args['pickle_path'], 'rb'))
+    method = args['method']
 
     manager = mp.Manager()
     q = manager.Queue()
@@ -106,7 +115,7 @@ if __name__ == "__main__":
                 spectrum    = psm['Spectrum']
                 scan_number = psm['Spectrum Scan Number']
                 args = [pep_seq, spectrum, scan_number, db_name, exp]
-                job = pool.apply_async(psm_score_worker, (args, q))
+                job = pool.apply_async(psm_score_worker, (args, q, method))
                 jobs.append(job)
 
     for job in jobs:
