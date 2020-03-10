@@ -266,6 +266,9 @@ class TheoreticalSpectrum:
         self.ions = ions
         return ions
 
+class QalScore:
+    def __init__(self,):
+        pass
 
 class ScoreReport:
     def __init__(self, out_report_path):
